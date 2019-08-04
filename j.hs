@@ -24,7 +24,7 @@ import Jassbot.Typeof (typeof)
 import Jassbot.DB (buildDatabase, DB)
 
 
-data Command = TypeOf String | Search String | MkDatabase String String
+data Command = TypeOf String | Search String Int Double | MkDatabase String String
 
 parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
@@ -39,10 +39,24 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
         )
 
     typeOfOptions =
-        TypeOf <$> argument str (help "function name" <> metavar "needle")
+        TypeOf <$> argument str (help "The functions name" <> metavar "needle")
 
     searchOptions =
-        Search <$> argument str (help "search string" <> metavar "needle")
+        Search <$> argument str (help "The search string" <> metavar "needle")
+               <*> option auto ( showDefault
+                               <> value 3
+                               <> long "results"
+                               <> short 'n'
+                               <> help "How many results should be displayed at max. Use 0 to disable the limit."
+                               <> metavar "num-results"
+                               )
+               <*> option auto ( showDefault 
+                               <> value 0.4
+                               <> long "threshold"
+                               <> short 't'
+                               <> help "Minimum score for a function to be displayed"
+                               <> metavar "threshold"
+                               )
 
     mkDatabaseOptions =
         MkDatabase <$> argument str (help "path to common.j" <> metavar "common.j")
@@ -73,7 +87,7 @@ main = do
     options <- parseOptions
     case options of
         TypeOf needle -> typeOfx needle
-        Search needle -> searchx needle
+        Search{}-> searchx options
         MkDatabase cj bj -> mkDatabasex cj bj
 
 typeOfx needle = do
@@ -84,10 +98,12 @@ typeOfx needle = do
         Just s -> putStrLn $ pretty s
 
 
-searchx needle = do
+searchx (Search needle numresults threshold) = do
     db <- readDb
 
-    forM_ (take 3 $ search db needle) $
+    let numresults' = if numresults <= 0 then maxBound else numresults
+
+    forM_ (take numresults' $ search db needle threshold) $
         putStrLn . pretty . snd
 
 mkDatabasex cj bj = do

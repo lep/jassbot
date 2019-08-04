@@ -193,14 +193,14 @@ data FindAccumulator = Accu {
 
 
 
-search :: DB -> String -> [(Double, Signature)]
-search db needle =
+search :: DB -> String -> Double -> [(Double, Signature)]
+search db needle threshold =
     let name :: Maybe Name
         params :: Maybe [Type]
         ret :: Maybe Name
 
         Right (name, params, ret) = parse sloppySignatureParser "input" needle
-        thrshold = 0.4 * (genericLength $ catMaybes [fmap pure name, params, fmap pure ret])
+        thrshold = threshold * (genericLength $ catMaybes [fmap pure name, params, fmap pure ret])
 
         s x = (score (dbTypes db) name params ret x, x)
 
