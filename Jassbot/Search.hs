@@ -75,7 +75,7 @@ levenshtein :: TypeMap -> [Type] -> [Type] -> Double
 levenshtein _ [] [] = 1
 levenshtein m a b   = toPercent $ runST x
   where
-    maximumScore = fromIntegral $ max (length a) (length b)
+    maximumScore = max (genericLength a) (genericLength b)
     toPercent v = (maximumScore - v) / maximumScore
 
     x :: ST s Double
@@ -130,41 +130,38 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
 
     cons = (:)
 
-    go (uncons -> Nothing) _                      a = (a, True)
-    go pattern                (uncons -> Nothing) a = (a, null pattern)
-
-    go (uncons -> Just (p,ps)) (uncons -> Just (s,ss)) !a =
-        let caseEqual = p == s
-            lowEqual  = toLower p == toLower s
-
-        in if not lowEqual
-           then go (cons p ps) ss $
-                    Accu { pos = pos a + 1
-                         , matchedPrevious = False
-                         , score = score a + nonMatchScore
-                         , firstMatch = firstMatch a
-                         }
-           else if caseEqual
-           then go ps ss $
-                    Accu { pos = pos a + 1
-                         , matchedPrevious = True
-                         , score = score a + caseMatchScore + continuityBonus a
-                         , firstMatch = firstMatch a <> First (Just $ pos a)
-                         }
-           else go ps ss $ 
-                    Accu { pos = pos a + 1
-                         , matchedPrevious = True
-                         , score = score a + nonCaseMatchScore + continuityBonus a
-                         , firstMatch = firstMatch a <> First (Just $ pos a)
-                         }
+    go (uncons -> Nothing)     _                       !a = (a, True)
+    go pattern                 (uncons -> Nothing)     !a = (a, null pattern)
+    go (uncons -> Just (p,ps)) (uncons -> Just (s,ss)) !a
+        | toLower p /= toLower s =
+            go (cons p ps) ss $
+                Accu { pos = pos a + 1
+                     , matchedPrevious = False
+                     , score = score a + nonMatchScore
+                     , firstMatch = firstMatch a
+                     }
+        | p == s =
+            go ps ss $
+                Accu { pos = pos a + 1
+                     , matchedPrevious = True
+                     , score = score a + caseMatchScore + continuityBonus a
+                     , firstMatch = firstMatch a <> First (Just $ pos a)
+                     }
+        | otherwise = 
+            go ps ss $ 
+                Accu { pos = pos a + 1
+                     , matchedPrevious = True
+                     , score = score a + nonCaseMatchScore + continuityBonus a
+                     , firstMatch = firstMatch a <> First (Just $ pos a)
+                     }
 
     continuityBonus a =
         if matchedPrevious a
-        then  continuityScore
+        then continuityScore
         else 0
 
     toPercent thisScore = 1- (optimalScore - thisScore) / optimalScore
-    optimalScore = (fromIntegral $ length pattern -1) * (caseMatchScore + continuityScore) + caseMatchScore + earlyMatchScore
+    optimalScore = (genericLength pattern -1) * (caseMatchScore + continuityScore) + caseMatchScore + earlyMatchScore
     
     continuityScore     = 1
     nonCaseMatchScore   = 0

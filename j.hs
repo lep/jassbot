@@ -30,7 +30,7 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
     opts = info (pCommand <**> helper)
         ( fullDesc
-        <> header ("j - cli jass utility")
+        <> header "j - cli jass utility"
         )
     pCommand = hsubparser
         ( command "type" (info typeOfOptions (progDesc "Returns the type of the function"))
@@ -111,7 +111,7 @@ mkDatabasex cj bj = do
     b <- parse programm "Blizzard.j" <$> readFile bj
 
     case (c, b) of
-        (Right (Programm c'), Right (Programm b')) -> do
+        (Right (Programm c'), Right (Programm b')) -> 
             writeDb . buildDatabase . Programm $ c' <> b'
 
         (Left err, _) -> do

@@ -17,6 +17,7 @@ import Data.Binary
 
 import Data.List (intercalate)
 
+import Data.Functor
 import Control.Applicative
 
 import Text.Megaparsec ( option, sepBy, try, lookAhead, choice, eof)
@@ -53,10 +54,10 @@ sloppySignatureParser =
         --traceM "fullsig"
         name <- Just <$> Jass.identifier
         Jass.reserved "takes"
-        args <- (Jass.reserved "nothing" *> pure ["nothing"]) <|> (Jass.identifier `sepBy` (optional $ symbol ","))
+        args <- (Jass.reserved "nothing" $> ["nothing"]) <|> (Jass.identifier `sepBy` optional (symbol ","))
         ret <- option "" $ do
             Jass.reserved "returns"
-            option "" ((Jass.reserved "nothing" *> pure "nothing") <|> Jass.identifier)
+            option "" ((Jass.reserved "nothing" $> "nothing") <|> Jass.identifier)
 
         return $ case args of
             ["nothing"] -> (name, Just [], empty2Maybe ret)
@@ -66,16 +67,16 @@ sloppySignatureParser =
         --traceM "nameRet"
         name <- Just <$> Jass.identifier
         Jass.reserved "returns"
-        ret <- option "" ((Jass.reserved "nothing" *> pure "nothing") <|> Jass.identifier)
+        ret <- option "" ((Jass.reserved "nothing" $> "nothing") <|> Jass.identifier)
         return (name, Nothing, empty2Maybe ret)
 
     paramRet = try $ do
         --traceM "paramRet"
         optional $ Jass.reserved "takes"
-        args <- (Jass.reserved "nothing" *> pure ["nothing"]) <|> (Jass.identifier `sepBy` (optional $ symbol ","))
+        args <- (Jass.reserved "nothing" $> ["nothing"]) <|> (Jass.identifier `sepBy` optional (symbol ","))
         ret <- option "" $ do
             Jass.reserved "returns"
-            option "" ((Jass.reserved "nothing" *> pure "nothing") <|> Jass.identifier)
+            option "" ((Jass.reserved "nothing" $> "nothing") <|> Jass.identifier)
     
         return $ case args of
             ["nothing"] -> (Nothing, Just [], empty2Maybe ret)
