@@ -5,7 +5,14 @@ import Options.Applicative
 import Control.Applicative
 import Control.Monad
 
-import Data.Binary (decodeFile, encodeFile)
+import Data.Binary (decodeFileOrFail, encodeFile)
+
+import System.Directory
+import System.IO (hPutStrLn, stderr)
+import System.IO.Error
+import System.Exit
+import System.FilePath ((</>))
+
 
 import Text.Megaparsec (parse, errorBundlePretty)
 import Jass.Parser
@@ -14,7 +21,7 @@ import Jass.Ast
 import Jassbot.Signature (pretty)
 import Jassbot.Search (search)
 import Jassbot.Typeof (typeof)
-import Jassbot.DB (buildDatabase)
+import Jassbot.DB (buildDatabase, DB)
 
 
 data Command = TypeOf String | Search String | MkDatabase String String
@@ -41,6 +48,27 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
         MkDatabase <$> argument str (help "path to common.j" <> metavar "common.j")
                    <*> argument str (help "path to Blizzard.j" <> metavar "Blizzard.j")
 
+readDb :: IO DB
+readDb = do
+    datadir <- getXdgDirectory XdgData "jassbot"
+    x <- tryIOError (decodeFileOrFail $ datadir </> "jassbot.db")
+    case x of
+        Left ex -> do
+            hPutStrLn stderr $ unwords ["Could not open database. Have you run init yet?", show ex]
+            exitWith $ ExitFailure 1
+        Right x' ->
+          case x' of
+            Right x' -> return x'
+            Left (_, msg) -> do
+                hPutStrLn stderr $ unwords ["Could not open database. Have you run init yet?", msg]
+                exitWith $ ExitFailure 1
+
+writeDb :: DB -> IO ()
+writeDb db = do
+    datadir <- getXdgDirectory XdgData "jassbot"
+    createDirectoryIfMissing True datadir
+    encodeFile (datadir </> "jassbot.db") db
+
 main = do
     options <- parseOptions
     case options of
@@ -49,15 +77,15 @@ main = do
         MkDatabase cj bj -> mkDatabasex cj bj
 
 typeOfx needle = do
-    db <- decodeFile "jassbot.db"
+    db <- readDb
     let x = typeof db needle
     case x of
-        Nothing -> putStrLn "Unknown function"
+        Nothing -> putStrLn $ unwords ["Unknown function:", needle]
         Just s -> putStrLn $ pretty s
 
 
 searchx needle = do
-    db <- decodeFile "jassbot.db"
+    db <- readDb
 
     forM_ (take 3 $ search db needle) $
         putStrLn . pretty . snd
@@ -68,7 +96,14 @@ mkDatabasex cj bj = do
 
     case (c, b) of
         (Right (Programm c'), Right (Programm b')) -> do
-            encodeFile "jassbot.db" $ buildDatabase $ Programm (c' <> b')
+            writeDb . buildDatabase . Programm $ c' <> b'
+
+        (Left err, _) -> do
+            hPutStrLn stderr $ errorBundlePretty err
+            exitWith $ ExitFailure 2
+        (_, Left err) -> do
+            hPutStrLn stderr $ errorBundlePretty err
+            exitWith $ ExitFailure 2
 
 
 
