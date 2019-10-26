@@ -24,7 +24,7 @@ import Jassbot.Typeof (typeof)
 import Jassbot.DB (buildDatabase, DB)
 
 
-data Command = TypeOf String | Search String Int Double | MkDatabase String String
+data Command = TypeOf String (Maybe String) | Search String Int Double (Maybe String) | MkDatabase String String (Maybe String)
 
 parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
@@ -40,6 +40,7 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
 
     typeOfOptions =
         TypeOf <$> argument str (help "The functions name" <> metavar "needle")
+               <*> optional (option str $ long "data-dir")
 
     searchOptions =
         Search <$> argument str (help "The search string" <> metavar "needle")
@@ -57,14 +58,43 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
                                <> help "Minimum score for a function to be displayed"
                                <> metavar "threshold"
                                )
+               <*> optional (option str $ long "data-dir")
 
     mkDatabaseOptions =
         MkDatabase <$> argument str (help "path to common.j" <> metavar "common.j")
                    <*> argument str (help "path to Blizzard.j" <> metavar "Blizzard.j")
+                   <*> optional (option str $ long "data-dir")
 
-readDb :: IO DB
-readDb = do
-    datadir <- getXdgDirectory XdgData "jassbot"
+
+main = do
+    options <- parseOptions
+    case options of
+        TypeOf needle p -> readDb p >>= typeOfx needle
+        Search _ _ _ p -> readDb p >>= searchx options
+        MkDatabase cj bj p -> mkDatabasex cj bj p
+
+typeOfx needle db = do
+    let x = typeof db needle
+    case x of
+        Nothing -> putStrLn $ unwords ["Unknown function:", needle]
+        Just s -> putStrLn $ pretty s
+
+
+searchx (Search needle numresults threshold _) db = do
+    let numresults' = if numresults <= 0 then maxBound else numresults
+
+    forM_ (take numresults' $ search db needle threshold) $
+        putStrLn . pretty . snd
+
+getDbPath :: Maybe String -> IO String
+getDbPath x =
+  case x of
+    Just datadir -> return datadir
+    Nothing -> getXdgDirectory XdgData "jassbot"
+
+readDb :: Maybe String -> IO DB
+readDb p = do
+    datadir <- getDbPath p
     x <- tryIOError (decodeFileOrFail $ datadir </> "jassbot.db")
     case x of
         Left ex -> do
@@ -77,42 +107,20 @@ readDb = do
                 hPutStrLn stderr $ unwords ["Could not open database. Have you run init yet?", msg]
                 exitWith $ ExitFailure 1
 
-writeDb :: DB -> IO ()
-writeDb db = do
-    datadir <- getXdgDirectory XdgData "jassbot"
+
+writeDb :: Maybe String -> DB -> IO ()
+writeDb p db = do
+    datadir <- getDbPath p
     createDirectoryIfMissing True datadir
     encodeFile (datadir </> "jassbot.db") db
 
-main = do
-    options <- parseOptions
-    case options of
-        TypeOf needle -> typeOfx needle
-        Search{}-> searchx options
-        MkDatabase cj bj -> mkDatabasex cj bj
-
-typeOfx needle = do
-    db <- readDb
-    let x = typeof db needle
-    case x of
-        Nothing -> putStrLn $ unwords ["Unknown function:", needle]
-        Just s -> putStrLn $ pretty s
-
-
-searchx (Search needle numresults threshold) = do
-    db <- readDb
-
-    let numresults' = if numresults <= 0 then maxBound else numresults
-
-    forM_ (take numresults' $ search db needle threshold) $
-        putStrLn . pretty . snd
-
-mkDatabasex cj bj = do
+mkDatabasex cj bj p = do
     c <- parse programm "common.j" <$> readFile cj
     b <- parse programm "Blizzard.j" <$> readFile bj
 
     case (c, b) of
         (Right (Programm c'), Right (Programm b')) -> 
-            writeDb . buildDatabase . Programm $ c' <> b'
+            writeDb p . buildDatabase . Programm $ c' <> b'
 
         (Left err, _) -> do
             hPutStrLn stderr $ errorBundlePretty err
