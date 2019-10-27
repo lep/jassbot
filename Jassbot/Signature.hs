@@ -20,7 +20,9 @@ import Data.List (intercalate)
 import Data.Functor
 import Control.Applicative
 
+import Text.Megaparsec (Parsec)
 import Text.Megaparsec ( option, sepBy, try, lookAhead, choice, eof)
+import Data.Void
 
 import Jass.Parser as Jass
 import qualified Jass.Ast as Jass
@@ -47,6 +49,7 @@ fnname (Sig _ _ n _ _) = n
 returnType :: Signature -> Jass.Type
 returnType (Sig _ _ _ _ r) = r
 
+sloppySignatureParser :: Parsec Void String (Maybe String, Maybe [String], Maybe String)
 sloppySignatureParser =
     justName <|> fullSig <|> nameRet <|> paramRet
   where

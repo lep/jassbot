@@ -130,7 +130,7 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
 
     cons = (:)
 
-    go (uncons -> Nothing)     _                       !a = (a, True)
+    go (uncons -> Nothing)     leftover                !a = (a { score = score a + (genericLength leftover)*leftoverNeedlePenality} , True)
     go pattern                 (uncons -> Nothing)     !a = (a, null pattern)
     go (uncons -> Just (p,ps)) (uncons -> Just (s,ss)) !a
         | toLower p /= toLower s =
@@ -168,6 +168,7 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
     earlyMatchScore     = 1
     nonMatchScore       = 0
     caseMatchScore      = 2
+    leftoverNeedlePenality  = (-0.05)
 
     scoreAndEarlyMatchBonus accu =
       score accu + 
@@ -197,11 +198,16 @@ search db needle threshold =
         ret :: Maybe Name
 
         Right (name, params, ret) = parse sloppySignatureParser "input" needle
-        thrshold = threshold * (genericLength $ catMaybes [fmap pure name, params, fmap pure ret])
+        
+        normalize = 1/(genericLength $ catMaybes [fmap pure name, params, fmap pure ret])
 
         s x = (score (dbTypes db) name params ret x, x)
 
-    in sortOn (Down . fst) . filter ((>thrshold).fst) . map s $ dbSigs db
+    in sortOn (Down . fst)
+     . filter ( (>threshold) .fst)
+     . map (first (* normalize))
+     . map s
+     $ dbSigs db
 
   where
     score tymap name params ret sig = sum $ map ( $ sig)
