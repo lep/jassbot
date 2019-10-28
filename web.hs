@@ -15,6 +15,7 @@ import System.IO (hPutStrLn, stderr)
 import System.IO.Error
 import System.Exit
 import System.FilePath ((</>))
+import System.Environment
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Arrow
@@ -49,7 +50,8 @@ readDb p = do
                 exitWith $ ExitFailure 1
 
 main = do
-    db <- readDb (Just ".")
+    path <- Just . head <$> getArgs
+    db <- readDb path
     scotty 3000 $
         get "/api" $
             param "query" >>= json . take 20 . (search db `flip` 0.4)
