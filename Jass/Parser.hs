@@ -119,12 +119,12 @@ toplevel = globals
         return $ Global vdecl
 
     typedef = do
-    reserved "type"
-    new <- identifier
-    reserved "extends"
-    base <- identifier
-    horizontalSpace
-    return [Typedef new base]
+        reserved "type"
+        new <- identifier
+        reserved "extends"
+        base <- identifier
+        horizontalSpace
+        return [Typedef new base]
 
 pSignature = do
     
