@@ -1,14 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
-
-import Web.Scotty
-
-import Data.Monoid (mconcat)
-
 import Jassbot.Search
 import Jassbot.DB
 import Jassbot.Signature
 
-import Data.Binary (decodeFileOrFail, encodeFile)
+import Data.Binary (decodeFileOrFail)
 
 import System.Directory
 import System.IO (hPutStrLn, stderr)
@@ -17,10 +11,18 @@ import System.Exit
 import System.FilePath ((</>))
 import System.Environment
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Arrow
+
+import Control.Concurrent (forkFinally)
+import qualified Control.Exception as E
+import Control.Monad (unless, forever, void)
+import qualified Data.ByteString as S
+import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.UTF8 as UTF8
+import Network.Socket
+import Network.Socket.ByteString (sendAll, recv)
 
 import Data.Aeson.Types
+import Data.Aeson
 
 import qualified Jass.Ast
 
@@ -52,7 +54,27 @@ readDb p = do
 main = do
     path <- Just . head <$> getArgs
     db <- readDb path
-    scotty 3000 $
-        get "/api" $
-            param "query" >>= json . take 20 . (search db `flip` 0.4)
+    runServer (answerOnce db)
+  where
+    answerOnce db sock = do
+        query <- recv sock 4096
+        unless (S.null query) $ do
+            S.putStrLn query
+            sendAll sock . L.toStrict . encode . take 20 $ search db (UTF8.toString query) 0.4
+
+-- adapted from https://hackage.haskell.org/package/network-3.1.2.5/docs/Network-Socket.html
+runServer server = E.bracket mkSock rmSock loop
+  where
+    loop sock = forever $ E.bracketOnError (accept sock) (close . fst)
+        $ \(conn, _) -> void $
+            forkFinally (server conn) (const $ gracefulClose conn 5000)
+    mkSock = do
+        sock <- socket AF_UNIX Stream 0
+        bind sock (SockAddrUnix "/tmp/jassbot-api.sock")
+        listen sock 5
+        pure sock
+
+    rmSock sock = do
+        close sock
+        removeFile "/tmp/jassbot-api.sock"
 
