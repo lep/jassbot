@@ -16,19 +16,14 @@ import Control.Concurrent (forkFinally)
 import qualified Control.Exception as E
 import Control.Monad (unless, forever, void)
 import qualified Data.ByteString as S
+import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.UTF8 as UTF8
 import Network.Socket
 import Network.Socket.ByteString (sendAll, recv)
 
-import Data.Aeson.Types
-import Data.Aeson
-
+import Data.List (intercalate)
 import qualified Jass.Ast
-
-instance ToJSON Jass.Ast.Constant
-instance ToJSON Native
-instance ToJSON Signature
 
 getDbPath :: Maybe String -> IO String
 getDbPath x =
@@ -59,8 +54,7 @@ main = do
     answerOnce db sock = do
         query <- recv sock 4096
         unless (S.null query) $ do
-            S.putStrLn query
-            sendAll sock . L.toStrict . encode . take 20 $ search db (UTF8.toString query) 0.4
+            sendAll sock . S8.pack . (\x -> "[" ++ x ++ "]") . intercalate "," . map (show.pretty.snd) . take 20 $ search db (UTF8.toString query) 0.4
 
 -- adapted from https://hackage.haskell.org/package/network-3.1.2.5/docs/Network-Socket.html
 runServer server = E.bracket mkSock rmSock loop

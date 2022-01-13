@@ -52,8 +52,6 @@ executable web
                       mtl,
                       parser-combinators,
                       network,
-                      data-default-class,
-                      aeson,
                       bytestring,
                       utf8-string
 
