@@ -5,6 +5,9 @@ import Options.Applicative
 import Control.Applicative
 import Control.Monad
 
+import Control.Monad.Trans.Except
+import Control.Monad.IO.Class
+
 import Data.Binary (decodeFileOrFail, encodeFile)
 
 import System.Directory
@@ -23,8 +26,10 @@ import Jassbot.Search (search)
 import Jassbot.Typeof (typeof)
 import Jassbot.DB (buildDatabase, DB)
 
+exceptT :: Either e a -> ExceptT e IO a
+exceptT = ExceptT . return
 
-data Command = TypeOf String (Maybe String) | Search String Int Double (Maybe String) | MkDatabase String String (Maybe String)
+data Command = TypeOf String (Maybe String) | Search String Int Double (Maybe String) | MkDatabase [FilePath] (Maybe FilePath)
 
 parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
@@ -61,8 +66,7 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
                <*> optional (option str $ long "data-dir")
 
     mkDatabaseOptions =
-        MkDatabase <$> argument str (help "path to common.j" <> metavar "common.j")
-                   <*> argument str (help "path to Blizzard.j" <> metavar "Blizzard.j")
+        MkDatabase <$> some (argument str (help "path to jass files to idnex" <> metavar "[JASSFILES]"))
                    <*> optional (option str $ long "data-dir")
 
 
@@ -71,7 +75,7 @@ main = do
     case options of
         TypeOf needle p -> readDb p >>= typeOfx needle
         Search _ _ _ p -> readDb p >>= searchx options
-        MkDatabase cj bj p -> mkDatabasex cj bj p
+        MkDatabase jassFiles databasePath -> mkDatabasex jassFiles databasePath
 
 typeOfx needle db = do
     let x = typeof db needle
@@ -114,22 +118,22 @@ writeDb p db = do
     createDirectoryIfMissing True datadir
     encodeFile (datadir </> "jassbot.db") db
 
-mkDatabasex cj bj p = do
-    c <- parse programm "common.j" <$> readFile cj
-    b <- parse programm "Blizzard.j" <$> readFile bj
 
-    case (c, b) of
-        (Right (Programm c'), Right (Programm b')) -> 
-            writeDb p . buildDatabase . Programm $ c' <> b'
 
-        (Left err, _) -> do
+mkDatabasex :: [FilePath] -> Maybe FilePath -> IO ()
+mkDatabasex jassFiles databasePath = do
+    x <- runExceptT $ forM jassFiles $ \path -> do
+        src <- liftIO $ readFile path
+        exceptT $ parse programm path src
+    case x of
+        Left err -> do
             hPutStrLn stderr $ errorBundlePretty err
             exitWith $ ExitFailure 2
-        (_, Left err) -> do
-            hPutStrLn stderr $ errorBundlePretty err
-            exitWith $ ExitFailure 2
+        Right progs -> do
+            writeDb databasePath . buildDatabase $ concatPrograms progs
+  where
+    getToplevel :: Ast x Programm -> [Ast x Toplevel]
+    getToplevel (Programm xs) = xs
 
-
-
-
-
+    concatPrograms :: [Ast x Programm] -> Ast x Programm
+    concatPrograms = Programm . concat . map getToplevel
