@@ -29,7 +29,9 @@ import Jassbot.DB (buildDatabase, DB)
 exceptT :: Either e a -> ExceptT e IO a
 exceptT = ExceptT . return
 
-data Command = TypeOf String (Maybe String) | Search String Int Double (Maybe String) | MkDatabase [FilePath] (Maybe FilePath)
+data Command = TypeOf String (Maybe String)
+             | Search String Int Double (Maybe String)
+             | MkDatabase [FilePath] (Maybe FilePath)
 
 parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
@@ -53,15 +55,15 @@ parseOptions = customExecParser (prefs showHelpOnEmpty) opts
                                <> value 3
                                <> long "results"
                                <> short 'n'
-                               <> help "How many results should be displayed at max. Use 0 to disable the limit."
-                               <> metavar "num-results"
+                               <> help "Display at most N results. Use 0 to disable the limit."
+                               <> metavar "N"
                                )
                <*> option auto ( showDefault 
                                <> value 0.4
                                <> long "threshold"
                                <> short 't'
                                <> help "Minimum score for a function to be displayed"
-                               <> metavar "threshold"
+                               <> metavar "T"
                                )
                <*> optional (option str $ long "data-dir")
 

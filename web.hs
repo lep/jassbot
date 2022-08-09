@@ -22,6 +22,8 @@ import qualified Data.ByteString.UTF8 as UTF8
 import Network.Socket
 import Network.Socket.ByteString (sendAll, recv)
 
+import Options.Applicative
+
 import Data.List (intercalate)
 import qualified Jass.Ast
 
@@ -46,15 +48,39 @@ readDb p = do
                 hPutStrLn stderr $ unwords ["Could not open database. Have you run init yet?", msg]
                 exitWith $ ExitFailure 1
 
-main = do
-    path <- Just . head <$> getArgs
-    db <- readDb path
-    runServer (answerOnce db)
+data Options =
+  Options
+    { threshold :: Double
+    , numResults :: Int
+    , databasePath :: Maybe FilePath
+    } deriving (Show)
+
+parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
-    answerOnce db sock = do
+    opts = info (pCommand <**> helper)
+        ( fullDesc
+        <> header "j - web api endpoint"
+        )
+    pCommand =
+        Options <$> option auto (showDefault <> help "Display entries with at least T score" <> metavar "T" <> value 0.4 <> long "threshold")
+                <*> option auto (showDefault <> help "Display N results at most" <> metavar "N" <> value 20 <> long "num-results")
+                <*> optional (option str $ long "data-dir")
+
+main = do
+    options <- parseOptions
+    db <- readDb $ databasePath options
+    runServer (answerOnce options db)
+  where
+    answerOnce options db sock = do
         query <- recv sock 4096
         unless (S.null query) $ do
-            sendAll sock . S8.pack . (\x -> "[" ++ x ++ "]") . intercalate "," . map (show.pretty.snd) . take 20 $ search db (UTF8.toString query) 0.4
+            sendAll sock
+            . S8.pack
+            . (\x -> "[" ++ x ++ "]") -- We do this by hand as compiling aeson
+            . intercalate ","         -- takes too much memory on my VPS.
+            . map (show.pretty.snd)
+            . take (numResults options)
+            . search db (UTF8.toString query) $ threshold options
 
 -- adapted from https://hackage.haskell.org/package/network-3.1.2.5/docs/Network-Socket.html
 runServer server = E.bracket mkSock rmSock loop
