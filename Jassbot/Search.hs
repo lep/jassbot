@@ -36,12 +36,12 @@ type TypeMap = Map Type Type
 
 lookup :: (MonadReader TypeMap m) => Type -> m Type
 lookup name = do
-    x <- Map.lookup name <$> ask
+    x <- asks $ Map.lookup name
     case x of
         Nothing -> error $ unwords ["Unknown type:", show name]
         Just t -> return t
 
-hasParent a = Map.member a <$> ask
+hasParent a = asks $ Map.member a
 
 ancestors base = do
     hasp <- hasParent base
@@ -102,9 +102,9 @@ levenshtein m a b   = toPercent $ runST x
             forM_ (zip [0..] a) $ \(i, ca) -> do
                 s_score <- similarity ca cb
                 --let s_score = if ca == cb then 0 else 1
-                dcost <- (+1)       <$> (lift $ readArray d (i, j+1))
-                icost <- (+0.5)     <$> (lift $ readArray d (i+1, j))
-                scost <- (+s_score) <$> (lift $ readArray d (i, j))
+                dcost <- (+1)       <$> lift (readArray d (i, j+1))
+                icost <- (+0.5)     <$> lift (readArray d (i+1, j))
+                scost <- (+s_score) <$> lift (readArray d (i, j))
 
                 lift $ writeArray d (i+1, j+1) $ minimum [dcost, icost, scost]
 
@@ -123,7 +123,7 @@ levenshtein m a b   = toPercent $ runST x
         lift $ readArray d (la, lb)
 
 fuzzy :: Name -> Name -> (Double, Bool)
-fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern string $ Accu 0 False 0 mempty
+fuzzy needle string = first (toPercent . scoreAndEarlyMatchBonus) . go needle string $ Accu 0 False 0 mempty
   where
     uncons [] = Nothing
     uncons (x:xs) = Just (x, xs)
@@ -131,7 +131,7 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
     cons = (:)
 
     go (uncons -> Nothing)     leftover                !a = (a { score = score a + (genericLength leftover)*leftoverNeedlePenality} , True)
-    go pattern                 (uncons -> Nothing)     !a = (a, null pattern)
+    go needle                  (uncons -> Nothing)     !a = (a, null needle)
     go (uncons -> Just (p,ps)) (uncons -> Just (s,ss)) !a
         | toLower p /= toLower s =
             go (cons p ps) ss $
@@ -161,14 +161,14 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
         else 0
 
     toPercent thisScore = 1- (optimalScore - thisScore) / optimalScore
-    optimalScore = (genericLength pattern -1) * (caseMatchScore + continuityScore) + caseMatchScore + earlyMatchScore
+    optimalScore = (genericLength needle -1) * (caseMatchScore + continuityScore) + caseMatchScore + earlyMatchScore
     
     continuityScore     = 1
     nonCaseMatchScore   = 0
     earlyMatchScore     = 1
     nonMatchScore       = 0
     caseMatchScore      = 2
-    leftoverNeedlePenality  = (-0.05)
+    leftoverNeedlePenality  = -0.05
 
     scoreAndEarlyMatchBonus accu =
       score accu + 
@@ -199,14 +199,13 @@ search db needle threshold =
 
         Right (name, params, ret) = parse sloppySignatureParser "input" needle
         
-        normalize = 1/(genericLength $ catMaybes [fmap pure name, params, fmap pure ret])
+        normalize = 1/genericLength (catMaybes [void name, void params, void ret])
 
         s x = (score (dbTypes db) name params ret x, x)
 
     in sortOn (Down . fst)
      . filter ( (>threshold) .fst)
-     . map (first (* normalize))
-     . map s
+     . map (first (* normalize) . s)
      $ dbSigs db
 
   where

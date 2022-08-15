@@ -15,6 +15,7 @@ module Jass.Parser
     
     ) where
 
+import Data.Functor (($>))
 import Control.Applicative hiding (many, some)
 import Control.Monad
 
@@ -93,7 +94,7 @@ identifier = (lexeme . try) (p >>= check)
                , "endif", "loop", "endloop", "set", "call", "return"
                , "takes", "returns", "constant", "native", "function"
                , "nothing", "true", "false", "null", "and", "or", "not"
-               , "local", "array"
+               , "local", "array", "extends", "type"
                ]
 
 parens :: Parser a -> Parser a
@@ -109,12 +110,12 @@ toplevel = globals
 
   where
     functionLike = do
-        const <- fromMaybe Normal <$> optional (reserved "constant"*> pure Jass.Ast.Const)
+        const <- fromMaybe Normal <$> optional (reserved "constant" $> Jass.Ast.Const)
         native const <|> function const
 
     globals = between (reserved "globals"<* horizontalSpace)
                       (reserved "endglobals" <* horizontalSpace) $ many $ do
-        const <- fromMaybe Normal <$> optional (reserved "constant" *> pure Jass.Ast.Const)
+        const <- fromMaybe Normal <$> optional (reserved "constant" $> Jass.Ast.Const)
         vdecl <- vardecl const
         return $ Global vdecl
 
@@ -127,12 +128,11 @@ toplevel = globals
         return [Typedef new base]
 
 pSignature = do
-    
     name <- identifier
     reserved "takes"
-    args <- (reserved "nothing" *> pure []) <|> ((,) <$> identifier <*> identifier) `sepBy` symbol ","
+    args <- (reserved "nothing" $> []) <|> ((,) <$> identifier <*> identifier) `sepBy` symbol ","
     reserved "returns"
-    ret <- (reserved "nothing" *> pure "nothing") <|> identifier
+    ret <- (reserved "nothing" $> "nothing") <|> identifier
     horizontalSpace
     return (name, args, ret)
 
@@ -195,7 +195,7 @@ statement = returnStmt
 
 vardecl constantness = do
     typ <- identifier
-    isArray <- reserved "array" *> pure True <|> pure False
+    isArray <- reserved "array" $> True <|> pure False
     if isArray
     then varArray typ <* horizontalSpace
     else varNormal typ <* horizontalSpace
@@ -215,7 +215,7 @@ expression = makeExprParser term table
             , [ binary (reserved "or") "or"]
             , [ binary (reserved "and") "and"]
             ]
-    binary t op = InfixL (t *> pure (\a b -> Call op [a, b]))
+    binary t op = InfixL (t $> (\a b -> Call op [a, b]))
 
 term = parens expression
     <|> literal
@@ -228,9 +228,9 @@ term = parens expression
     literal = String <$> stringlit
             <|> either Real Int <$> eitherP (try reallit) intlit
             <|> Rawcode <$> rawcode
-            <|> (reserved "true" *> pure ( Bool True))
-            <|> (reserved "false" *> pure ( Bool False))
-            <|> (reserved "null" *> pure Null)
+            <|> (reserved "true" $> Bool True)
+            <|> (reserved "false" $> Bool False)
+            <|> (reserved "null" $> Null)
             <|> Code <$> (reserved "function" *> identifier)
 
     varOrCall = do

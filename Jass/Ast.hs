@@ -145,9 +145,9 @@ instance Compose (Ast var) where
         Loop b -> Loop <$> T.traverse f b
         Exitwhen cond -> Exitwhen <$> f cond
         Return (Just e) -> Return . Just <$> f e
-        Call n args -> Call <$> pure n <*> T.traverse f args
+        Call n args -> Call n <$> T.traverse f args
         Var lvar -> Var <$> f lvar
-        AVar n ix -> AVar <$> pure n <*> f ix
+        AVar n ix -> AVar n <$> f ix
         SDef c n t (Just e) -> SDef c n t . Just <$> f e
         x -> pure x
 
