@@ -1,8 +1,11 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Jassbot.Search (search) where
+--module Jassbot.Search  where
+import Unsafe.Coerce
 
 import Prelude hiding (lookup)
 
@@ -50,13 +53,43 @@ ancestors base = do
     else return [base]
 
 
-similarity :: (Fractional b, MonadReader TypeMap m) => Type -> Type -> m b
-similarity a b
+newtype LowerIsMoreSimilar a = LowerIsMoreSimilar { getLowerIsMoreSimilar :: a }
+    deriving (Eq, Ord, Fractional, Num, Show)
+
+newtype HigherIsMoreSimilar a = HigherIsMoreSimilar { getHigherIsMoreSimilar :: a }
+    deriving (Eq, Ord, Fractional, Num, Show)
+
+
+
+contra_similarity :: (Fractional b, MonadReader TypeMap m) => Type -> Type -> m (LowerIsMoreSimilar b)
+contra_similarity needle haystack = do
+    idx <- (haystack `elemIndex`) <$> ancestors needle
+    case idx of
+        Nothing -> pure 1
+        Just k -> pure $ fromIntegral k * 0.01
+
+co_similarity :: (Fractional b, MonadReader TypeMap m) => Type -> Type -> m (LowerIsMoreSimilar b)
+co_similarity needle haystack = do
+    idx <- (needle `elemIndex`) <$> ancestors haystack
+    case idx of
+        Nothing -> pure 1
+        Just k -> pure $ fromIntegral k * 0.01
+
+similarity_prefer_contra :: (Ord b, Fractional b, MonadReader TypeMap m) => Type -> Type -> m (LowerIsMoreSimilar b)
+similarity_prefer_contra needle haystack = do
+    contra <- contra_similarity needle haystack
+    co <- co_similarity needle haystack
+    pure $ min contra ((co+1)/2)
+
+similarity :: (Ord b, Fractional b, MonadReader TypeMap m) => Type -> Type -> m (LowerIsMoreSimilar b)
+similarity = similarity_prefer_contra
+
+symmetric_similarity :: (Fractional b, MonadReader TypeMap m) => Type -> Type -> m (LowerIsMoreSimilar b)
+symmetric_similarity a b
     | a == b = return 0
-similarity a b = do
+symmetric_similarity a b = do
     idxA <- elemIndex b <$> ancestors a
     idxB <- elemIndex a <$> ancestors b
-
     case (idxA, idxB) of
         (Nothing, Nothing) -> return 1
         (Just idx, _) -> return $ p idx
@@ -68,18 +101,23 @@ similarity a b = do
     p 4 = 0.4
     p _ = 0.5
 
-rsimilarity a b = (1-) <$> similarity a b
+rsimilarity :: (Ord b, Fractional b, MonadReader TypeMap m) => Type -> Type -> m (HigherIsMoreSimilar b)
+rsimilarity a b = HigherIsMoreSimilar .getLowerIsMoreSimilar . (1-) <$> similarity a b
 
 
-levenshtein :: TypeMap -> [Type] -> [Type] -> Double
+levenshtein :: TypeMap -> [Type] -> [Type] -> HigherIsMoreSimilar Double
 levenshtein _ [] [] = 1
-levenshtein m a b   = toPercent $ runST x
+levenshtein m a b   =
+ toPercent $ runST x
   where
+    maximumScore :: HigherIsMoreSimilar Double
     maximumScore = max (genericLength a) (genericLength b)
-    toPercent v = (maximumScore - v) / maximumScore
 
-    x :: ST s Double
-    x = runReaderT y m
+    toPercent :: LowerIsMoreSimilar Double -> HigherIsMoreSimilar Double
+    toPercent v = (maximumScore - unsafeCoerce v) / maximumScore
+
+    x :: ST s (LowerIsMoreSimilar Double)
+    x = LowerIsMoreSimilar <$> runReaderT y m
 
     y :: ReaderT TypeMap (ST s) Double
     y = do
@@ -100,7 +138,7 @@ levenshtein m a b   = toPercent $ runST x
 
         forM_ (zip [0..] b) $ \(j, cb) -> do
             forM_ (zip [0..] a) $ \(i, ca) -> do
-                s_score <- similarity ca cb
+                s_score <- getLowerIsMoreSimilar <$> similarity ca cb
                 --let s_score = if ca == cb then 0 else 1
                 dcost <- (+1)       <$> (lift $ readArray d (i, j+1))
                 icost <- (+0.5)     <$> (lift $ readArray d (i+1, j))
@@ -122,7 +160,7 @@ levenshtein m a b   = toPercent $ runST x
 
         lift $ readArray d (la, lb)
 
-fuzzy :: Name -> Name -> (Double, Bool)
+fuzzy :: Name -> Name -> (HigherIsMoreSimilar Double, Bool)
 fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern string $ Accu 0 False 0 mempty
   where
     uncons [] = Nothing
@@ -130,6 +168,7 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
 
     cons = (:)
 
+    go :: Name -> Name -> FindAccumulator -> (FindAccumulator, Bool)
     go (uncons -> Nothing)     leftover                !a = (a { score = score a + (genericLength leftover)*leftoverNeedlePenality} , True)
     go pattern                 (uncons -> Nothing)     !a = (a, null pattern)
     go (uncons -> Just (p,ps)) (uncons -> Just (s,ss)) !a
@@ -160,7 +199,10 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
         then continuityScore
         else 0
 
+    toPercent :: HigherIsMoreSimilar Double -> HigherIsMoreSimilar Double
     toPercent thisScore = 1- (optimalScore - thisScore) / optimalScore
+
+    optimalScore :: HigherIsMoreSimilar Double
     optimalScore = (genericLength pattern -1) * (caseMatchScore + continuityScore) + caseMatchScore + earlyMatchScore
     
     continuityScore     = 1
@@ -185,7 +227,7 @@ fuzzy pattern string = first (toPercent . scoreAndEarlyMatchBonus) . go pattern 
 data FindAccumulator = Accu {
       pos :: Int
     , matchedPrevious :: Bool
-    , score :: Double
+    , score :: HigherIsMoreSimilar Double
     , firstMatch :: First Int
     } deriving (Show)
 
@@ -206,6 +248,7 @@ search db needle threshold =
     in sortOn (Down . fst)
      . filter ( (>threshold) .fst)
      . map (first (* normalize))
+     . map (first getHigherIsMoreSimilar)
      . map s
      $ dbSigs db
 
@@ -217,14 +260,16 @@ search db needle threshold =
             , nativeBonus
             ]
 
+    nativeBonus :: Signature -> HigherIsMoreSimilar Double
     nativeBonus (Sig _ Native _ _ _) = 0.00
     nativeBonus (Sig _ Function _ _ _) = -0.01
 
+    getNameSearch :: Maybe Name -> Signature -> HigherIsMoreSimilar Double
     getNameSearch Nothing _ = 0
     getNameSearch (Just name) sig =
       case fuzzy name $ fnname sig of
         (_, False) -> -1/0
-        (score, True) -> score
+        (fuzzyScore, True) -> fuzzyScore
 
     getParamSearch Nothing _ _ = 0
     getParamSearch (Just params) tymap sig =
