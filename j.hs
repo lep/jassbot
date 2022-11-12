@@ -138,4 +138,4 @@ mkDatabasex jassFiles databasePath = do
     getToplevel (Programm xs) = xs
 
     concatPrograms :: [Ast x Programm] -> Ast x Programm
-    concatPrograms = Programm . concat . map getToplevel
+    concatPrograms = Programm . concatMap getToplevel

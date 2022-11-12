@@ -7,7 +7,7 @@ version:             1.0.0
 -- synopsis:
 -- description:
 -- bug-reports:
--- license:
+license:	     GPL-3.0
 license-file:        LICENSE
 author:              lep
 maintainer:          lep.delete@googlemail.com

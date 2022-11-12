@@ -22,6 +22,16 @@ Also make sure to pass `-h` for a useful help message
 
 # Installation
 
-First run `make init` followed by `make`. This project uses GNUMake, GHC 8.6,
-megaparsec-7 and optparse-applicative.
+## By hand
 
+To build this project you need a somewhat recent GHC and cabal. A simple
+`$ cabal build j` should suffice. Then you can either use the compiled binary,
+of which the path can be found via `cabal list-bin j` or run it via cabal like
+`cabal run j -- type GetHandleId`.
+
+## nix
+
+If you have a working [nix/nixos](https://nixos.org/) installation you
+can directly run it via `nix run github:lep/jassbot -- type GetHandleId`. Do
+note though that you still have to initialize jassbot once via the `init`
+subcommand.
