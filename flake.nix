@@ -1,7 +1,3 @@
-# SPDX-FileCopyrightText: 2021 Serokell <https://serokell.io/>
-#
-# SPDX-License-Identifier: CC0-1.0
-
 {
   description = "jassbot - jass cli util";
 
@@ -14,32 +10,43 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        ghcPackages = pkgs.haskellPackages.ghcWithPackages(ps: [
+          ps.optparse-applicative
+          ps.megaparsec
+        ]);
 
-        haskellPackages = pkgs.haskellPackages;
+        j = pkgs.stdenv.mkDerivation {
+          name = "j";
+          src = self;
+          buildPhase = ''
+            ${ghcPackages}/bin/ghc -O j
+          '';
 
-        jailbreakUnbreak = pkg:
-          pkgs.haskell.lib.doJailbreak (pkg.overrideAttrs (_: { meta = { }; }));
-
-        # DON'T FORGET TO PUT YOUR PACKAGE NAME HERE, REMOVING `throw`
-        packageName = "jassbot";
-        cabalBuilds = haskellPackages.callCabal2nix packageName self rec {
-            # Dependency overrides go here
+          installPhase = ''
+            install -Dt $out/bin j
+          '';
         };
-      in rec {
-        packages.${packageName} = cabalBuilds;
-        defaultPackage = cabalBuilds;
 
-        apps.web = { type = "app"; program = "${cabalBuilds}/bin/web"; };
-        apps.j = { type = "app"; program = "${cabalBuilds}/bin/j"; };
-        apps.default = apps.j;
+        web = pkgs.stdenv.mkDerivation {
+          name = "web";
+          src = self;
+          buildPhase = ''
+            ${ghcPackages}/bin/ghc -O web
+          '';
 
-        devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            #haskellPackages.haskell-language-server # you must build it with your ghc to work
-            #ghcid
-            cabal-install
-          ];
-          inputsFrom = builtins.attrValues self.packages.${system};
+          installPhase = ''
+            install -Dt $out/bin web
+          '';
         };
+
+      in {
+        packages.j = j;
+        packages.web = web;
+    		defaultPackage =  j;
+
+    		devShell = pkgs.mkShell {
+    		    buildInputs =  [ ghcPackages pkgs.cabal-install ];
+    		    inputsFrom = builtins.attrValues self.packages.${system};
+    		};
       });
 }
