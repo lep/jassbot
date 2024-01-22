@@ -20,8 +20,8 @@ import Data.List (intercalate)
 import Data.Functor
 import Control.Applicative
 
-import Text.Megaparsec (Parsec)
-import Text.Megaparsec ( option, sepBy, try, lookAhead, choice, eof)
+import Text.Megaparsec
+    ( Parsec, option, sepBy, try, lookAhead, choice, eof )
 import Data.Void
 
 import Jass.Parser as Jass
@@ -80,7 +80,7 @@ sloppySignatureParser =
         ret <- option "" $ do
             Jass.reserved "returns"
             option "" ((Jass.reserved "nothing" $> "nothing") <|> Jass.identifier)
-    
+
         return $ case args of
             ["nothing"] -> (Nothing, Just [], empty2Maybe ret)
             _           -> (Nothing, empty2Maybe args, empty2Maybe ret)

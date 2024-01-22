@@ -50,9 +50,38 @@ executable web
                     hashable             ,
                     megaparsec           ,
                     mtl                  ,
+                    transformers         ,
                     parser-combinators   ,
                     optparse-applicative ,
                     network              ,
-                    utf8-string          
+                    utf8-string          ,
+                    HostAndPort          ,
+                    wai                  ,
+                    warp                 ,
+                    http-types           ,
+                    aeson
 
+  default-language:    Haskell2010
+
+executable daemon
+  main-is:             daemon.hs
+  other-modules:    Jass.Ast, Jass.Parser,
+                    Jassbot.DB, Jassbot.Search, Jassbot.Signature, Jassbot.Typeof
+                    Data.Composeable
+  build-depends:    array                ,
+                    base                 ,
+                    binary               ,
+                    containers           ,
+                    directory            ,
+                    utf8-string,
+                    filepath             ,
+                    hashable             ,
+                    megaparsec           ,
+                    mtl                  ,
+                    transformers         ,
+                    parser-combinators   ,
+                    transformers         ,
+                    bytestring           ,
+                    optparse-applicative 
+  -- hs-source-dirs:
   default-language:    Haskell2010
