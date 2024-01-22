@@ -62,14 +62,40 @@
           let cfg = config.jassbot.services.api;
           in {
             options.jassbot.services.api = {
-              enable = lib.mkEnableOption "Enable jassbot web API"; # TODO: web options
+              enable = lib.mkEnableOption "Enable jassbot web API";
+
+              num-results = lib.mkOption {
+                description = "How many results to show at most";
+                type = lib.types.ints.positive;
+                default = 40;
+              };
+
+              threshold = lib.mkOption {
+                description = "Minimum score to be displayed";
+                type = lib.types.numbers.between 0 1;
+                default = 0.4;
+              };
+
+              address = lib.mkOption {
+                description = "Connection string";
+                default = "127.0.0.1:3000";
+                example = "/var/run/unix.sock";
+                type = lib.types.str;
+              };
+
+              jass-files = lib.mkOption {
+                description = "List of jass files to parse";
+                default = [ "${cj}/common.j" ];
+                type = lib.types.listOf lib.types.path;
+              };
+
             };
 
             config = lib.mkIf cfg.enable {
               systemd.services."jassbot.api" = {
                 wantedBy = [ "multi-user.target" ];
                 serviceConfig = {
-                  ExecStart = "${web}/bin/web ${cj}/common.j";
+                  ExecStart = "${web}/bin/web --threshold ${toString cfg.threshold} --num-results ${toString cfg.num-results} --address ${toString cfg.address} ${toString cfg.jass-files}";
                 };
               };
             };
@@ -82,6 +108,8 @@
         packages.web = web;
         packages.docker = docker;
         defaultPackage = j;
+
+        # TODO: this is scoped under system
         nixosModules.default = nixosModule;
 
         devShell = pkgs.mkShell {
