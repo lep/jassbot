@@ -62,7 +62,7 @@
           let cfg = config.jassbot.services.api;
           in {
             options.jassbot.services.api = {
-              enable = lib.mkEnableOption "Enable jassbot web API";
+              enable = lib.mkEnableOption "Enable jassbot web API"; # TODO: web options
             };
 
             config = lib.mkIf cfg.enable {
@@ -82,7 +82,7 @@
         packages.web = web;
         packages.docker = docker;
         defaultPackage = j;
-        nixosModule.default = nixosModule;
+        nixosModules.default = nixosModule;
 
         devShell = pkgs.mkShell {
           buildInputs = [ ghcPackages pkgs.cabal-install ];
