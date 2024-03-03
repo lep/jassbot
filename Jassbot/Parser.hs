@@ -89,6 +89,12 @@ reserved t = try $ do
 anyTok :: Parser String
 anyTok = some letterChar <* hspace
 
+singlenameParamP :: Parser Query
+singlenameParamP = ParamQuery . pure <$> identifier
+
+singlenameReturnP :: Parser Query
+singlenameReturnP = ReturnQuery <$> identifier
+
 {-
 type a
 type a extends b

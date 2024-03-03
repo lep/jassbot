@@ -2,9 +2,9 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE LambdaCase #-}
 
 import qualified Control.Exception as E
 import Control.Monad (forM, forM_)
@@ -14,7 +14,7 @@ import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as UTF8
 import Data.Function ((&))
-import Data.List (sortOn)
+import Data.List (nub, sortOn)
 import Data.Maybe (mapMaybe)
 import Data.String (fromString)
 import GHC.Generics (Generic)
@@ -116,7 +116,7 @@ exceptT = ExceptT . return
 
 search db allTypes s queryString threshold =
   let p x = parseMaybe $ x <* eof
-      q = MinQuery $ mapMaybe (`p` queryString) [functionP, typeP, globalP]
+      q = MinQuery $ mapMaybe (`p` queryString) [functionP, typeP, globalP, singlenameParamP, singlenameReturnP]
       q' = fuzzyType allTypes q
       scored = filter ((<= threshold) . snd) $ map (\x -> (x, scoreQuery s q' x)) db
       sorted = map fst $ sortOn snd scored
@@ -132,7 +132,6 @@ fuzzyType allTypes = go
       ExtendsQuery x -> ExtendsQuery $ findFuzzyType allTypes x
       ReturnQuery x -> ReturnQuery $ findFuzzyType allTypes x
       x -> x
-
 
 runWarpServer s allTypes db options =
   case serverAddress options of

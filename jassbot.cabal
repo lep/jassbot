@@ -20,7 +20,7 @@ executable j
   main-is:             j.hs
   other-modules:    Jass.Ast, Jass.Parser,
                     Jassbot.DB, Jassbot.Search, Jassbot.Signature, Jassbot.Typeof
-                    Data.Composeable
+                    Data.Composeable, Jassbot.SearchNG, Jassbot.Parser
   build-depends:    array                ,
                     base                 ,
                     binary               ,
