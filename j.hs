@@ -9,6 +9,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.IO.Class
 
 import Data.Binary (decodeFileOrFail, encodeFile)
+import Data.Bifunctor (second)
 
 import System.Directory
 import System.IO (hPutStrLn, stderr)

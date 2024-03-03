@@ -32,7 +32,42 @@ executable j
                     mtl                  ,
                     parser-combinators   ,
                     transformers         ,
-                    optparse-applicative 
+                    optparse-applicative ,
+                    fuzzy, text-metrics, text, relation
+  -- hs-source-dirs:
+  default-language:    Haskell2010
+
+executable ng
+  main-is:             ng.hs
+  -- ghc-options:
+  --   -O
+  --   -threaded
+  --   -fprof-auto
+  --   "-with-rtsopts=-p"
+  other-modules:    Jass.Ast, Jass.Parser,
+                    Jassbot.DB, Jassbot.Search, Jassbot.Signature, Jassbot.Typeof
+                    Data.Composeable, Jassbot.SearchNG, Jassbot.Parser, Jass.Printer
+  build-depends:    array                ,
+                    base                 ,
+                    binary               ,
+                    containers           ,
+                    directory            ,
+                    filepath             ,
+                    hashable             ,
+                    megaparsec           ,
+                    mtl                  ,
+                    parser-combinators   ,
+                    transformers         ,
+                    bytestring           ,
+                    optparse-applicative ,
+                    network              ,
+                    utf8-string          ,
+                    HostAndPort          ,
+                    wai                  ,
+                    warp                 ,
+                    http-types           ,
+                    aeson,
+                    fuzzy, text-metrics, text, relation
   -- hs-source-dirs:
   default-language:    Haskell2010
 
