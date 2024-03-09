@@ -10,7 +10,7 @@ import qualified Data.Set as Set
 import Data.Void (Void)
 import Jassbot.SearchNG (Query (..))
 import Text.Megaparsec
-import Text.Megaparsec.Char (hspace, letterChar, string, alphaNumChar, char)
+import Text.Megaparsec.Char (alphaNumChar, char, hspace, letterChar, string)
 import Text.Megaparsec.Debug
 import Prelude hiding (any)
 
@@ -89,11 +89,17 @@ reserved t = try $ do
 anyTok :: Parser String
 anyTok = some letterChar <* hspace
 
-singlenameParamP :: Parser Query
-singlenameParamP = ParamQuery . pure <$> identifier
+singlenameParamP :: Set String -> Parser Query
+singlenameParamP allTypes = do
+  i <- identifier
+  guard $ Set.member i allTypes
+  pure $ ParamQuery [i]
 
-singlenameReturnP :: Parser Query
-singlenameReturnP = ReturnQuery <$> identifier
+singlenameReturnP :: Set String -> Parser Query
+singlenameReturnP allTypes = do
+  i <- identifier
+  guard $ Set.member i allTypes
+  pure $ ReturnQuery i
 
 {-
 type a

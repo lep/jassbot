@@ -30,9 +30,10 @@ import Network.Wai.Handler.Warp (defaultSettings, runSettings, runSettingsSocket
 import Options.Applicative
 import System.Directory (removeFile)
 import System.Environment (getArgs)
-import System.Exit (ExitCode (ExitFailure), exitWith)
+import System.Exit (ExitCode (ExitFailure), exitWith, exitSuccess)
 import System.IO (hPutStrLn, stderr)
 import Text.Megaparsec (MonadParsec (eof), errorBundlePretty, parse, parseMaybe)
+import qualified Data.Set as Set
 
 data Config = Config
   { lsInsertionCost :: Int,
@@ -114,9 +115,9 @@ main = do
 exceptT :: Either e a -> ExceptT e IO a
 exceptT = ExceptT . return
 
-search db allTypes s queryString threshold =
+search db allTypes allTypesSet s queryString threshold =
   let p x = parseMaybe $ x <* eof
-      q = MinQuery $ mapMaybe (`p` queryString) [functionP, typeP, globalP, singlenameParamP, singlenameReturnP]
+      q = MinQuery $ mapMaybe (`p` queryString) [functionP, typeP, globalP, singlenameParamP allTypesSet, singlenameReturnP allTypesSet]
       q' = fuzzyType allTypes q
       scored = filter ((<= threshold) . snd) $ map (\x -> (x, scoreQuery s q' x)) db
       sorted = map fst $ sortOn snd scored
@@ -140,6 +141,7 @@ runWarpServer s allTypes db options =
       let settings = setHost (fromString host) $ setPort (read port) defaultSettings
       runSettings settings $ app db options
   where
+    allTypesSet = Set.fromList allTypes
     mkSock path = do
       sock <- socket AF_UNIX Stream 0
       bind sock (SockAddrUnix path)
@@ -153,6 +155,7 @@ runWarpServer s allTypes db options =
     runWithSock sock =
       runSettingsSocket defaultSettings sock $ app db options
 
+
     app db options req respond =
       case lookup "q" $ queryString req of
         Just (Just query)
@@ -165,7 +168,7 @@ runWarpServer s allTypes db options =
                   ]
                 $ encode
                 $ map pretty . take (numResults options)
-                $ search db allTypes s (UTF8.toString query) (threshold options)
+                $ search db allTypes allTypesSet s (UTF8.toString query) (threshold options)
         _ ->
           respond $
             responseBuilder
