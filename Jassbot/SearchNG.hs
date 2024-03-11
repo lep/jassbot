@@ -89,7 +89,7 @@ setup ast =
             `Set.union` Set.fromList ["handle", "code", "integer", "real", "string", "boolean", "nothing"] -- nothing? only needed for fuzzy type completion i think
       cfg =
         Config
-          { insertionCost = const 170,
+          { insertionCost = const 570,
             deletionCost = const 70,
             equalityScore = \a b ->
               let co = covariantTypeDistance tyRel a b
@@ -97,7 +97,7 @@ setup ast =
                   -- bascially checking for Nothing
                   co' = if co >= scoreMaxBound then co else min 4 co
                   contra' = if contra >= scoreMaxBound then contra else min 4 contra
-               in 40 * min co' (contra' + 2),
+               in 140 * min co' (contra' + 2),
             swappingCost = \_ _ -> 20
           }
 
