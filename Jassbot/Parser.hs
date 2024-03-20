@@ -165,7 +165,7 @@ functionP = do
   where
     takesP = option EmptyQuery $ do
       reserved "takes"
-      args <- some (anythingBut ["returns"])
+      args <- anythingBut ["returns"] `sepEndBy` (optional (char ',') <* hspace)
       pure $ ParamQuery args
 
     returnsP = option EmptyQuery $ do
