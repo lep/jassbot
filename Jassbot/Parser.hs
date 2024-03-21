@@ -140,20 +140,22 @@ anythingBut ks = try $ do
   hspace
   pure x
 
+pArgs rs = anythingBut rs `sepEndBy` (optional (char ',') <* hspace)
+
 -- not very happy with this but it seems to what it ought to do
 functionP :: Parser Query
 functionP = do
-  x <- identifier
+  x <- identifier <* optional (char ',') <* hspace
   case x of
     "takes" -> do
-      args <- some (anythingBut ["returns"])
+      args <- pArgs ["returns"]
       r <- option EmptyQuery $ do
         reserved "returns"
         ReturnQuery <$> identifier
       pure $ SumQuery [ParamQuery args, r]
     "returns" -> ReturnQuery <$> identifier
     _ -> do
-      y <- many (anythingBut ["takes", "returns"])
+      y <- pArgs ["takes", "returns"]
       case y of
         [] -> do
           t <- takesP
@@ -165,23 +167,21 @@ functionP = do
   where
     takesP = option EmptyQuery $ do
       reserved "takes"
-      args <- anythingBut ["returns"] `sepEndBy` (optional (char ',') <* hspace)
-      pure $ ParamQuery args
+      ParamQuery <$> pArgs ["returns"]
 
     returnsP = option EmptyQuery $ do
       reserved "returns"
       ReturnQuery <$> identifier
-    asType x = dbg "asType" $ do
-      args <- many (anythingBut ["returns"])
+    asType x = do
+      args <- pArgs ["returns"]
       r <- option EmptyQuery $ do
         reserved "returns"
         ReturnQuery <$> identifier
       pure $ SumQuery [ParamQuery $ x : args, r]
-    asName x = dbg "asName" $ do
+    asName x = do
       a <- option EmptyQuery $ do
         reserved "takes"
-        args <- some (anythingBut ["returns"])
-        pure $ ParamQuery args
+        ParamQuery <$> pArgs ["returns"]
       r <- option EmptyQuery $ do
         reserved "returns"
         ReturnQuery <$> identifier
