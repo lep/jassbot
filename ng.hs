@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ViewPatterns #-}
 
 import qualified Control.Exception as E
@@ -16,6 +17,7 @@ import qualified Data.ByteString.UTF8 as UTF8
 import Data.Function ((&))
 import Data.List (nub, sortOn)
 import Data.Maybe (mapMaybe)
+import qualified Data.Set as Set
 import Data.String (fromString)
 import GHC.Generics (Generic)
 import Jass.Ast
@@ -30,10 +32,9 @@ import Network.Wai.Handler.Warp (defaultSettings, runSettings, runSettingsSocket
 import Options.Applicative
 import System.Directory (removeFile)
 import System.Environment (getArgs)
-import System.Exit (ExitCode (ExitFailure), exitWith, exitSuccess)
+import System.Exit (ExitCode (ExitFailure), exitSuccess, exitWith)
 import System.IO (hPutStrLn, stderr)
 import Text.Megaparsec (MonadParsec (eof), errorBundlePretty, parse, parseMaybe)
-import qualified Data.Set as Set
 
 data Config = Config
   { lsInsertionCost :: Int,
@@ -115,13 +116,18 @@ main = do
 exceptT :: Either e a -> ExceptT e IO a
 exceptT = ExceptT . return
 
+deriving instance Generic Query
+
+instance ToJSON Query
+
 search db allTypes allTypesSet s queryString threshold =
   let p x = parseMaybe $ x <* eof
       q = MinQuery $ mapMaybe (`p` queryString) [functionP, typeP, globalP, singlenameParamP allTypesSet, singlenameReturnP allTypesSet]
       q' = fuzzyType allTypes q
-      scored = filter ((<= threshold) . snd) $ map (\x -> (x, scoreQuery s q' x)) db
+      q'' = minimizeQuery q'
+      scored = filter ((<= threshold) . snd) $ map (\x -> (x, scoreQuery s q'' x)) db
       sorted = map fst $ sortOn snd scored
-   in sorted
+   in (sorted, q'')
 
 -- TODO: this needs caching. Maybe everything does.
 fuzzyType allTypes = go
@@ -155,20 +161,26 @@ runWarpServer s allTypes db options =
     runWithSock sock =
       runSettingsSocket defaultSettings sock $ app db options
 
-
-    app db options req respond =
+    app db options req respond = do
       case lookup "q" $ queryString req of
         Just (Just query)
-          | not $ BS.null query ->
+          | not $ BS.null query -> do
+              let queryString' = UTF8.toString query
+                  parsed = map (\x -> parseMaybe (x <* eof) queryString') [functionP, typeP, globalP, singlenameParamP allTypesSet, singlenameReturnP allTypesSet]
+                  (result, queryAst) = search db allTypes allTypesSet s queryString' (threshold options)
+                  prettyResult = map pretty $ take (numResults options) result
+                  response =
+                    object
+                      [ "results" .= prettyResult,
+                        "queryParsed" .= queryAst
+                      ]
               respond
                 $ responseLBS
                   status200
                   [ ("Content-Type", "text/json"),
                     ("Access-Control-Allow-Origin", "*") -- only used for local dev
                   ]
-                $ encode
-                $ map pretty . take (numResults options)
-                $ search db allTypes allTypesSet s (UTF8.toString query) (threshold options)
+                $ encode response
         _ ->
           respond $
             responseBuilder

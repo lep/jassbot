@@ -42,8 +42,6 @@ import Text.Megaparsec (errorBundlePretty, parse)
 import Unsafe.Coerce (unsafeCoerce)
 import Prelude hiding (any)
 
-similarity = undefined
-
 parsecj :: IO (Ast Name Programm)
 parsecj = do
   j <- readFile "common.j"
@@ -183,6 +181,20 @@ data Query
   | SumQuery [Query]
   | EmptyQuery
   deriving (Eq, Show)
+
+minimizeQuery :: Query -> Query
+minimizeQuery = \case
+  MinQuery qs -> go MinQuery qs
+  SumQuery qs -> go SumQuery qs
+  x -> x
+  where
+    go c qs =
+      let qs2 = map minimizeQuery qs
+          qs3 = filter (/= EmptyQuery) qs2
+       in case qs3 of
+            [] -> EmptyQuery
+            [q] -> q
+            _ -> c qs3
 
 data Filter
   = IsConstant
