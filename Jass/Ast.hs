@@ -20,7 +20,7 @@ module Jass.Ast
     , fmap, foldMap, traverse
     , s2i, s2r, rawcode2int
     , eliminateElseIfs
-    , isGlobal, isLocal, isFunction, isOp
+    , isGlobal, isLocal, isFunction, isOp, isTypedef
     ) where
 
 import Prelude hiding (fmap, foldMap, traverse)
@@ -313,6 +313,10 @@ isLocal _ = False
 isFunction :: Ast a Toplevel -> Bool
 isFunction Function{} = True
 isFunction _ = False
+
+isTypedef :: Ast a Toplevel -> Bool
+isTypedef Typedef{} = True
+isTypedef _ = False
 
 
 isOp x = x `elem` ["and", "or", "not"
